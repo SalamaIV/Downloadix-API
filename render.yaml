@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: downloadix-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    plan: starter
+    envVars:
+      - key: DOWNLOADIX_API_KEY
+        generateValue: true
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://vidbee-web-new.ahmadsalama007i.chatgpt.site
+      - key: MAX_CONCURRENT_DOWNLOADS
+        value: "2"
+      - key: MAX_FILE_SIZE_MB
+        value: "500"
+      - key: FILE_TTL_SECONDS
+        value: "3600"

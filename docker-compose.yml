@@ -1,0 +1,39 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      DOWNLOADIX_API_KEY: ${DOWNLOADIX_API_KEY}
+      PUBLIC_BASE_URL: https://${API_DOMAIN}
+      ALLOWED_ORIGINS: ${SITE_ORIGIN}
+      MAX_CONCURRENT_DOWNLOADS: ${MAX_CONCURRENT_DOWNLOADS:-2}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-1000}
+      FILE_TTL_SECONDS: ${FILE_TTL_SECONDS:-3600}
+    volumes:
+      - downloadix_files:/data/downloads
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  downloadix_files:
+  caddy_data:
+  caddy_config:

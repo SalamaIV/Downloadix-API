@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hmac
+import logging
 import os
 import re
 import shutil
@@ -26,6 +29,29 @@ MAX_FILE_SIZE_MB = max(25, int(os.getenv("MAX_FILE_SIZE_MB", "500")))
 API_KEY = os.getenv("DOWNLOADIX_API_KEY", "").strip()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
+YTDLP_COOKIES_BASE64 = os.getenv("YTDLP_COOKIES_BASE64", "").strip()
+YTDLP_COOKIES_FILE = Path("/tmp/downloadix-youtube-cookies.txt")
+
+logger = logging.getLogger("downloadix")
+
+
+def prepare_cookie_file() -> Path | None:
+    if not YTDLP_COOKIES_BASE64:
+        return None
+    try:
+        cookie_bytes = base64.b64decode(YTDLP_COOKIES_BASE64, validate=True)
+        first_line = cookie_bytes.splitlines()[0] if cookie_bytes else b""
+        if first_line not in {b"# HTTP Cookie File", b"# Netscape HTTP Cookie File"}:
+            raise ValueError("Cookies must use Netscape/Mozilla format.")
+        YTDLP_COOKIES_FILE.write_bytes(cookie_bytes)
+        YTDLP_COOKIES_FILE.chmod(0o600)
+        return YTDLP_COOKIES_FILE
+    except (binascii.Error, ValueError, OSError) as error:
+        logger.warning("YTDLP_COOKIES_BASE64 is invalid: %s", error)
+        return None
+
+
+YTDLP_COOKIE_PATH = prepare_cookie_file()
 
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS, thread_name_prefix="downloadix")
@@ -72,6 +98,8 @@ def build_options(job_id: str, payload: DownloadRequest) -> dict:
         "quiet": True,
         "no_warnings": True,
     }
+    if YTDLP_COOKIE_PATH:
+        base["cookiefile"] = str(YTDLP_COOKIE_PATH)
     if payload.kind == "audio":
         codec = payload.format.lower() if payload.format.lower() in {"mp3", "m4a", "wav"} else "mp3"
         base.update({"format": "bestaudio/best", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": codec, "preferredquality": "320"}]})
